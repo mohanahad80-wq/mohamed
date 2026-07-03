@@ -1,0 +1,511 @@
+// MAMA SACDIYA — multi-role B2B2C marketplace schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CUSTOMER
+  BUSINESS_BUYER
+  SELLER
+  RIDER
+  ADMIN
+}
+
+enum AccountStatus {
+  UNASSIGNED
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+  INACTIVE
+}
+
+enum BusinessCategory {
+  CLOTHING
+  FOOD
+  ELECTRONICS
+  OTHER
+}
+
+enum District {
+  HODAN
+  WADAJIR
+  KARAAN
+  HAMAR_WEYNE
+  HAMAR_JABJAB
+  BONDHERE
+  WARDHIIGLEY
+  YAQSHID
+  SHIBIS
+  DAYNIILE
+  HAWL_WADAAG
+  SHANGANI
+  WAABERI
+  ABDIAZIZ
+  WARTA_NABADA
+  DHARKENLEY
+  KAXDA
+  HELIWAA
+}
+
+enum VendorType {
+  SELLER
+  BUSINESS_BUYER_STORE
+}
+
+enum ProductStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DEACTIVATED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  WAAFIPAY
+  EVC_PLUS
+  FLUTTERWAVE
+  COD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PayoutStatus {
+  HELD
+  RELEASED
+}
+
+enum PayoutType {
+  SELLER
+  BUSINESS_BUYER
+  RIDER
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  ESCALATED
+}
+
+enum RiderDeliveryStatus {
+  UNASSIGNED
+  ASSIGNED
+  REJECTED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+}
+
+enum AdminScope {
+  FULL
+  ORDER_MANAGER
+  VENDOR_REVIEWER
+}
+
+enum NotificationType {
+  ORDER_UPDATE
+  PRODUCT_APPROVAL
+  PRODUCT_REJECTION
+  DISPUTE
+  PAYOUT
+  VENDOR_APPROVAL
+  RIDER_ASSIGNMENT
+  DISTRICT_COVERAGE
+  BROADCAST
+  REVIEW
+  SYSTEM
+}
+
+enum BroadcastAudience {
+  ALL
+  VENDORS
+}
+
+model User {
+  id           String        @id @default(cuid())
+  phone        String        @unique
+  email        String?       @unique
+  passwordHash String
+  fullName     String?
+  status       AccountStatus @default(UNASSIGNED)
+  roles        Role[]        @default([])
+  adminScope   AdminScope?
+
+  phoneVerifiedAt   DateTime?
+  emailVerifiedAt   DateTime?
+  otpCode           String?
+  otpExpiresAt      DateTime?
+  emailOtpCode      String?
+  emailOtpExpiresAt DateTime?
+
+  failedPaymentAttempts Int       @default(0)
+  paymentLockedUntil    DateTime?
+
+  promotionsOptOut Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sellerProfile        SellerProfile?
+  businessBuyerProfile BusinessBuyerProfile?
+  riderProfile         RiderProfile?
+
+  addresses         Address[]
+  cartItems         CartItem[]
+  orders            Order[]         @relation("BuyerOrders")
+  disputesRaised    Dispute[]       @relation("DisputeRaisedBy")
+  reviews           Review[]        @relation("ReviewAuthor")
+  wishlistItems     Wishlist[]
+  notifications     Notification[]
+  auditLogs         AdminAuditLog[] @relation("AuditActor")
+  broadcastsCreated Broadcast[]     @relation("BroadcastCreator")
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String   @default("Home")
+  city      String   @default("Mogadishu")
+  district  District
+  details   String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model SellerProfile {
+  id                 String           @id @default(cuid())
+  userId             String           @unique
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName       String
+  ownerFullName      String
+  phone              String
+  email              String
+  category           BusinessCategory
+  licenseFile        String?
+  idDocFile          String?
+  logoFile           String?
+  city               String           @default("Mogadishu")
+  district           District
+  payoutNumber       String
+  defaultMinOrderQty Int              @default(10)
+  status             AccountStatus    @default(PENDING)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  products Product[]
+  orders   Order[]   @relation("SellerOrders")
+  payouts  Payout[]  @relation("SellerPayouts")
+  reviews  Review[]  @relation("SellerReviews")
+}
+
+model BusinessBuyerProfile {
+  id            String           @id @default(cuid())
+  userId        String           @unique
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName  String
+  ownerFullName String
+  phone         String
+  email         String
+  category      BusinessCategory
+  licenseFile   String?
+  idDocFile     String?
+  logoFile      String?
+  storeName     String?
+  city          String           @default("Mogadishu")
+  district      District
+  payoutNumber  String
+  status        AccountStatus    @default(PENDING)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  storeProducts  Product[]
+  purchaseOrders Order[]   @relation("BusinessBuyerPurchaseOrders")
+  storeOrders    Order[]   @relation("BuyerStoreOrders")
+  payouts        Payout[]  @relation("BuyerStorePayouts")
+  reviews        Review[]  @relation("BuyerStoreReviews")
+}
+
+model RiderProfile {
+  id               String        @id @default(cuid())
+  userId           String        @unique
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName         String
+  phone            String
+  photoFile        String?
+  vehicleType      String
+  plateNumber      String
+  idDocFile        String?
+  serviceDistricts District[]
+  payoutNumber     String
+  status           AccountStatus @default(PENDING)
+  isOnline         Boolean       @default(false)
+  currentLoad      Int           @default(0)
+  maxLoad          Int           @default(1)
+  totalDeliveries  Int           @default(0)
+  onTimeCount      Int           @default(0)
+  ratingSum        Int           @default(0)
+  ratingCount      Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  orders  Order[]  @relation("RiderOrders")
+  payouts Payout[] @relation("RiderPayouts")
+  reviews Review[] @relation("RiderReviews")
+}
+
+model Product {
+  id           String                @id @default(cuid())
+  vendorType   VendorType
+  sellerId     String?
+  seller       SellerProfile?        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  buyerStoreId String?
+  buyerStore   BusinessBuyerProfile? @relation(fields: [buyerStoreId], references: [id], onDelete: Cascade)
+
+  name            String
+  description     String
+  category        BusinessCategory
+  price           Decimal          @db.Decimal(12, 2)
+  minOrderQty     Int              @default(1)
+  stock           Int              @default(0)
+  images          String[]
+  variants        Json?
+  status          ProductStatus    @default(PENDING)
+  rejectionReason String?
+  isDeactivated   Boolean          @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+  wishlistItems Wishlist[]
+  reviews       Review[]
+
+  @@index([vendorType, status])
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model Order {
+  id          String @id @default(cuid())
+  orderNumber String @unique
+  groupId     String
+
+  buyerId String
+  buyer   User   @relation("BuyerOrders", fields: [buyerId], references: [id])
+
+  vendorType        VendorType
+  sellerId          String?
+  seller            SellerProfile?        @relation("SellerOrders", fields: [sellerId], references: [id])
+  buyerStoreBuyerId String?
+  buyerStoreBuyer   BusinessBuyerProfile? @relation("BusinessBuyerPurchaseOrders", fields: [buyerStoreBuyerId], references: [id])
+  buyerStoreId      String?
+  buyerStore        BusinessBuyerProfile? @relation("BuyerStoreOrders", fields: [buyerStoreId], references: [id])
+
+  subtotal    Decimal @db.Decimal(12, 2)
+  deliveryFee Decimal @default(0) @db.Decimal(12, 2)
+  total       Decimal @db.Decimal(12, 2)
+
+  status       OrderStatus @default(PENDING)
+  cancelReason String?
+
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(PENDING)
+
+  addressSnapshot Json
+  district        District
+
+  riderId     String?
+  rider       RiderProfile?       @relation("RiderOrders", fields: [riderId], references: [id])
+  riderStatus RiderDeliveryStatus @default(UNASSIGNED)
+
+  deliveredAt         DateTime?
+  disputeWindowEndsAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items    OrderItem[]
+  payment  Payment?
+  payouts  Payout[]
+  disputes Dispute[]
+  reviews  Review[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([buyerStoreId])
+  @@index([riderId])
+  @@index([groupId])
+}
+
+model OrderItem {
+  id            String  @id @default(cuid())
+  orderId       String
+  order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product @relation(fields: [productId], references: [id])
+  nameSnapshot  String
+  priceSnapshot Decimal @db.Decimal(12, 2)
+  imageSnapshot String?
+  quantity      Int
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  orderId        String        @unique
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method         PaymentMethod
+  status         PaymentStatus @default(PENDING)
+  amount         Decimal       @db.Decimal(12, 2)
+  transactionRef String?
+  attemptCount   Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model Payout {
+  id           String                @id @default(cuid())
+  type         PayoutType
+  sellerId     String?
+  seller       SellerProfile?        @relation("SellerPayouts", fields: [sellerId], references: [id])
+  buyerStoreId String?
+  buyerStore   BusinessBuyerProfile? @relation("BuyerStorePayouts", fields: [buyerStoreId], references: [id])
+  riderId      String?
+  rider        RiderProfile?         @relation("RiderPayouts", fields: [riderId], references: [id])
+  orderId      String
+  order        Order                 @relation(fields: [orderId], references: [id])
+  grossAmount  Decimal               @db.Decimal(12, 2)
+  commission   Decimal               @default(0) @db.Decimal(12, 2)
+  netAmount    Decimal               @db.Decimal(12, 2)
+  status       PayoutStatus          @default(HELD)
+  releasedAt   DateTime?
+  createdAt    DateTime              @default(now())
+
+  @@index([type, status])
+}
+
+model Dispute {
+  id               String        @id @default(cuid())
+  orderId          String
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  raisedById       String
+  raisedBy         User          @relation("DisputeRaisedBy", fields: [raisedById], references: [id])
+  reason           String
+  photoUrl         String?
+  status           DisputeStatus @default(OPEN)
+  responseDeadline DateTime
+  resolution       String?
+  resolvedById     String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+model Review {
+  id                 String                @id @default(cuid())
+  orderId            String
+  order              Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId          String
+  product            Product               @relation(fields: [productId], references: [id])
+  authorId           String
+  author             User                  @relation("ReviewAuthor", fields: [authorId], references: [id])
+  vendorType         VendorType
+  targetSellerId     String?
+  targetSeller       SellerProfile?        @relation("SellerReviews", fields: [targetSellerId], references: [id])
+  targetBuyerStoreId String?
+  targetBuyerStore   BusinessBuyerProfile? @relation("BuyerStoreReviews", fields: [targetBuyerStoreId], references: [id])
+  targetRiderId      String?
+  targetRider        RiderProfile?         @relation("RiderReviews", fields: [targetRiderId], references: [id])
+  rating             Int
+  comment            String?
+  isFlagged          Boolean               @default(false)
+  isHidden           Boolean               @default(false)
+  editableUntil      DateTime
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@unique([productId, orderId])
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+}
+
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  adminId    String
+  admin      User     @relation("AuditActor", fields: [adminId], references: [id])
+  action     String
+  targetType String
+  targetId   String
+  reason     String?
+  createdAt  DateTime @default(now())
+}
+
+model Broadcast {
+  id          String            @id @default(cuid())
+  audience    BroadcastAudience
+  title       String
+  body        String
+  createdById String
+  createdBy   User              @relation("BroadcastCreator", fields: [createdById], references: [id])
+  createdAt   DateTime          @default(now())
+}
+
+model DeliveryRateConfig {
+  id          String   @id @default(cuid())
+  district    District @unique
+  fixedRate   Decimal  @db.Decimal(12, 2)
+  perKmRate   Decimal  @default(0) @db.Decimal(12, 2)
+  useDistance Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+}
