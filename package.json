@@ -1,7 +1,10 @@
 {
-  "name": "mohamed",
+  "name": "@mohanahad80-wq/mamasacdiya",
   "version": "0.1.0",
   "private": true,
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -33,3 +36,5 @@
     "typescript": "^5"
   }
 }
+}
+  
